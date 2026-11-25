@@ -49,23 +49,40 @@ export function TaskForm({ initial }: { initial?: Initial }) {
   }
 
   return (
-    <form onSubmit={handleSubmit} noValidate>
-      {serverError && <div className="alert error">{serverError}</div>}
-      <label>
-        Title *
+    <form onSubmit={handleSubmit} noValidate aria-busy={pending}>
+      {/* Always in the DOM so screen readers announce the message when it appears. */}
+      <div role="alert">{serverError && <div className="alert error">{serverError}</div>}</div>
+      <div className="field">
+        <label htmlFor="titulo">
+          Title <span aria-hidden="true">*</span>
+        </label>
         <input
+          id="titulo"
+          name="titulo"
           value={titulo}
           onChange={(e) => setTitulo(e.target.value)}
+          required
           aria-invalid={!!titleError}
+          aria-describedby={titleError ? "titulo-error" : undefined}
           maxLength={120}
-          autoFocus
         />
-        {titleError && <span className="field-error">{titleError}</span>}
-      </label>
-      <label>
-        Description
-        <textarea value={descricao} onChange={(e) => setDescricao(e.target.value)} rows={4} maxLength={1000} />
-      </label>
+        {titleError && (
+          <span id="titulo-error" className="field-error" role="alert">
+            {titleError}
+          </span>
+        )}
+      </div>
+      <div className="field">
+        <label htmlFor="descricao">Description</label>
+        <textarea
+          id="descricao"
+          name="descricao"
+          value={descricao}
+          onChange={(e) => setDescricao(e.target.value)}
+          rows={4}
+          maxLength={1000}
+        />
+      </div>
       <div className="form-actions">
         <button type="submit" className="primary" disabled={pending}>
           {pending ? "Saving…" : initial ? "Save changes" : "Create task"}

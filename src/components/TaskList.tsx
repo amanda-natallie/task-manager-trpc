@@ -56,13 +56,28 @@ export function TaskList({
   );
   const query = useInfiniteQuery(listOptions);
 
+  // Optimistic delete: the task leaves the list at once; if the server call fails
+  // the previous list is put back and an error is shown. Either way the list is
+  // refetched at the end so it matches the server.
   const deleteTask = useMutation(
     trpc.task.delete.mutationOptions({
-      onSuccess: () => {
-        setFeedback({ kind: "success", text: "Task deleted." });
-        return queryClient.invalidateQueries({ queryKey: trpc.task.list.pathKey() });
+      onMutate: async ({ id }) => {
+        setFeedback(null);
+        await queryClient.cancelQueries({ queryKey: listOptions.queryKey });
+        const previous = queryClient.getQueryData(listOptions.queryKey);
+        queryClient.setQueryData(listOptions.queryKey, (old) =>
+          old
+            ? { ...old, pages: old.pages.map((p) => ({ ...p, items: p.items.filter((t) => t.id !== id) })) }
+            : old,
+        );
+        return { previous };
       },
-      onError: (err) => setFeedback({ kind: "error", text: `Could not delete: ${err.message}` }),
+      onError: (err, _input, context) => {
+        if (context?.previous) queryClient.setQueryData(listOptions.queryKey, context.previous);
+        setFeedback({ kind: "error", text: `Could not delete: ${err.message}` });
+      },
+      onSuccess: () => setFeedback({ kind: "success", text: "Task deleted." }),
+      onSettled: () => queryClient.invalidateQueries({ queryKey: trpc.task.list.pathKey() }),
     }),
   );
 
@@ -82,47 +97,53 @@ export function TaskList({
   const tasks = query.data?.pages.flatMap((p) => p.items) ?? [];
 
   return (
-    <section>
-      {feedback && (
-        <div role="status" className={`alert ${feedback.kind}`}>
-          {feedback.text}
-        </div>
-      )}
-      {query.isError && <div className="alert error">Could not load tasks: {query.error.message}</div>}
+    <section aria-label="Task list">
+      {/* Live regions stay in the DOM so screen readers announce new messages. */}
+      <div role="status">
+        {feedback?.kind === "success" && <div className="alert success">{feedback.text}</div>}
+      </div>
+      <div role="alert">
+        {feedback?.kind === "error" && <div className="alert error">{feedback.text}</div>}
+        {query.isError && <div className="alert error">Could not load tasks: {query.error.message}</div>}
+      </div>
 
       {tasks.length === 0 && <p className="muted">No tasks yet. Create the first one.</p>}
 
-      {tasks.map((task) => {
-        const deleting = deleteTask.isPending && deleteTask.variables?.id === task.id;
-        return (
-          <article key={task.id} className="card">
-            <div className="card-body">
-              <h3>{task.titulo}</h3>
-              {task.descricao && <p>{task.descricao}</p>}
-              <span className="meta">Created {dateFormat.format(task.dataCriacao)} UTC</span>
-            </div>
-            <div className="actions">
-              <Link className="button" href={`/tasks/${task.id}/edit`}>
-                Edit
-              </Link>
-              <button
-                className="danger"
-                disabled={deleting}
-                onClick={() => {
-                  if (!window.confirm(`Delete "${task.titulo}"?`)) return;
-                  setFeedback(null);
-                  deleteTask.mutate({ id: task.id });
-                }}
-              >
-                {deleting ? "Deleting…" : "Delete"}
-              </button>
-            </div>
-          </article>
-        );
-      })}
+      {tasks.map((task) => (
+        <article key={task.id} className="card">
+          <div className="card-body">
+            <h2>{task.titulo}</h2>
+            {task.descricao && <p>{task.descricao}</p>}
+            <span className="meta">
+              Created <time dateTime={task.dataCriacao.toISOString()}>{dateFormat.format(task.dataCriacao)} UTC</time>
+            </span>
+          </div>
+          <div className="actions">
+            {/* aria-label adds the task title, so each button has a unique name for screen readers. */}
+            <Link className="button" href={`/tasks/${task.id}/edit`} aria-label={`Edit ${task.titulo}`}>
+              Edit
+            </Link>
+            <button
+              type="button"
+              className="danger"
+              aria-label={`Delete ${task.titulo}`}
+              onClick={() => {
+                if (!window.confirm(`Delete "${task.titulo}"?`)) return;
+                deleteTask.mutate({ id: task.id });
+              }}
+            >
+              Delete
+            </button>
+          </div>
+        </article>
+      ))}
 
-      <div ref={sentinel} />
-      {isFetchingNextPage && <p className="muted">Loading more…</p>}
+      <div ref={sentinel} aria-hidden="true" />
+      {isFetchingNextPage && (
+        <p className="muted" role="status">
+          Loading more…
+        </p>
+      )}
       {!hasNextPage && tasks.length > 0 && <p className="muted">All {tasks.length} tasks loaded.</p>}
     </section>
   );

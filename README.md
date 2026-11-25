@@ -1,5 +1,7 @@
 # Task Manager — Next.js 15 + tRPC
 
+[![CI](https://github.com/amanda-natallie/task-manager-trpc/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/amanda-natallie/task-manager-trpc/actions/workflows/ci.yml)
+
 A small task manager built for a technical challenge: a Next.js 15 (App Router) app
 whose backend is a tRPC router that keeps tasks **in memory** (no database).
 
@@ -13,10 +15,15 @@ The task list is stored in memory on the server. It is re-seeded with the exampl
 
 ```bash
 npm install
-npm run dev        # http://localhost:3000
-npm test           # router + form tests (Vitest)
+npm run dev          # http://localhost:3000
+npm test             # unit tests: router, form, list (Vitest)
+npm run test:e2e     # end-to-end tests in Chromium (Playwright; builds and starts the app)
+npm run lint         # ESLint (Next.js, TypeScript and jsx-a11y rules)
+npm run typecheck    # tsc --noEmit
 npm run build && npm start   # production build
 ```
+
+The first `npm run test:e2e` needs the browser: `npx playwright install chromium`.
 
 Requires Node.js 24 (or 22.22+, the minimum for the test tooling; tested on Node 24).
 No environment variables or secrets are needed.
@@ -29,7 +36,8 @@ No environment variables or secrets are needed.
   (`BAD_REQUEST`); updating or deleting a missing task returns `NOT_FOUND` with a clear message.
 - **List page (`/`)** is server-side rendered: the Server Component calls the router directly and
   passes the first page to the client as initial data, so tasks are in the first HTML response.
-- **Delete** from the list (after a confirmation) with success/error feedback and a per-item loading state.
+- **Delete** from the list (after a confirmation), applied optimistically: the task disappears at once
+  and comes back with an error message if the server call fails.
 - **Create/edit form** (`/tasks/new`, `/tasks/[id]/edit`): functional components + hooks,
   client-side validation (title required) mirrored by the backend, server errors shown in the form.
 - **Bonus: infinite scroll** with cursor-based pagination and an `IntersectionObserver` sentinel.
@@ -37,6 +45,61 @@ No environment variables or secrets are needed.
 - **Loading and error pages**: a loading state for the list and an error boundary for every page.
 - **Responsive** from small phones (~360px) to desktop: one column, cards and form buttons stack on
   narrow screens, 44px tap targets, no horizontal scrolling. Plain CSS, no UI framework.
+- **Accessible**: landmarks (`header`/`nav`/`main`), a skip link, visible keyboard focus, labelled
+  inputs with errors linked through `aria-describedby`, and live regions so success and error
+  messages are announced by screen readers.
+
+## Architecture
+
+```mermaid
+flowchart LR
+  subgraph Browser
+    page["List page (HTML from SSR)"]
+    cc["Client components: TaskList, TaskForm"]
+    rq["React Query cache (tRPC hooks)"]
+  end
+  subgraph Server["Next.js server"]
+    rsc["Server Component: list / edit page"]
+    caller["Server-side tRPC caller"]
+    api["Route Handler /api/trpc"]
+    router["tRPC appRouter: Zod validation"]
+    store[("In-memory store (Map)")]
+  end
+  page -- "GET /" --> rsc
+  rsc --> caller --> router
+  cc --> rq -- "HTTP batch, superjson" --> api --> router
+  router --> store
+  rsc -. "first page as initialData" .-> cc
+```
+
+- **First load (SSR)**: the Server Component calls the router through a server-side caller (no
+  HTTP hop) and passes the first page to `TaskList` as React Query's initial data.
+- **After that (client)**: queries and mutations go through React Query and the tRPC client to
+  `/api/trpc`, which runs the same router. Both paths share one set of procedures and validation.
+
+**Trade-offs**
+
+- **Why tRPC here**: frontend and backend live in one TypeScript repo, so sharing the router type
+  gives end-to-end type safety with no schema files or code generation, and Zod input schemas are
+  the single source of validation.
+- **When I would not use it**: when the API has consumers outside this codebase (public API,
+  mobile apps in other languages, other teams). tRPC is not a documented HTTP contract; REST with
+  OpenAPI or GraphQL fits better there.
+- **Swapping the store for a database**: all data access in the router goes through `store.ts`
+  (the `store.tasks` Map, `sortedTasks` and `compareTasks`). Moving that behind a small repository (for example
+  `list(cursor, limit)`, `get`, `create`, `update`, `delete`) backed by PostgreSQL changes the
+  procedure bodies only; procedure names, inputs and outputs stay the same, so the client code
+  doesn't change.
+
+## Quality
+
+- **CI** ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs on every push and pull request to
+  `main`: type check, ESLint, unit tests, production build, then the Playwright E2E tests against that
+  build.
+- **Tests**: 13 unit tests (Vitest) and 5 E2E tests (Playwright: create, edit, delete with the confirm
+  dialog, empty-title validation, 404 for a missing task).
+- **Lighthouse** (local production build, Lighthouse 13): `/` and `/tasks/new` score 99 Performance on
+  mobile and 100 on desktop, and 100 in Accessibility, Best Practices and SEO on both.
 
 ## Structure
 
@@ -57,9 +120,13 @@ src/
     (list)/loading.tsx         loading state for the list only
     error.tsx                  error boundary for every page
     tasks/new, tasks/[id]/edit form pages
+    robots.ts, icon.svg        robots.txt and favicon
   components/
     TaskList.tsx, TaskForm.tsx
     TaskForm.test.tsx          form test (React Testing Library + jsdom)
+    TaskList.test.tsx          optimistic delete and rollback test
+e2e/tasks.spec.ts            Playwright end-to-end tests
+.github/workflows/ci.yml     CI pipeline
 ```
 
 ## Main decisions
@@ -104,8 +171,8 @@ src/
 - **Authentication and authorization** in the tRPC context and a `protectedProcedure`, so each user
   only sees and changes their own tasks.
 - **Rate limiting** and request size limits on the API route.
-- **Optimistic updates** for delete and edit, and an undo for delete instead of a confirm dialog.
-- **End-to-end tests** (for example Playwright) for the flows in the checklist above.
-- **ESLint** and CI running type check, tests and build on every pull request.
+- **Undo for delete** instead of a confirm dialog, and optimistic updates for edit too.
+- **More E2E coverage**: infinite scroll, mobile viewport and an automated accessibility check
+  (for example axe) in CI.
 
 All data in this repository is fictional.
