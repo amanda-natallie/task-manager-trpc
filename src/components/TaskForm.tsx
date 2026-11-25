@@ -66,12 +66,14 @@ export function TaskForm({ initial }: { initial?: Initial }) {
         Description
         <textarea value={descricao} onChange={(e) => setDescricao(e.target.value)} rows={4} maxLength={1000} />
       </label>
-      <button type="submit" className="primary" disabled={pending}>
-        {pending ? "Saving…" : initial ? "Save changes" : "Create task"}
-      </button>{" "}
-      <button type="button" onClick={() => router.push("/")} disabled={pending}>
-        Cancel
-      </button>
+      <div className="form-actions">
+        <button type="submit" className="primary" disabled={pending}>
+          {pending ? "Saving…" : initial ? "Save changes" : "Create task"}
+        </button>
+        <button type="button" onClick={() => router.push("/")} disabled={pending}>
+          Cancel
+        </button>
+      </div>
     </form>
   );
 }

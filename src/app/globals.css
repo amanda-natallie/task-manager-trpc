@@ -1,22 +1,43 @@
-/* Intentionally minimal styling: the challenge says no elaborate design is needed. */
+/* Mobile-first, no framework: one column that grows up to 720px on wider screens. */
 * { box-sizing: border-box; }
-body { margin: 0; font-family: system-ui, sans-serif; background: #f6f7f9; color: #1d2330; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; font-family: system-ui, sans-serif; line-height: 1.4; background: #f6f7f9; color: #1d2330; }
 a { color: inherit; }
-.header { display: flex; justify-content: space-between; align-items: center; padding: 12px 24px; background: #fff; border-bottom: 1px solid #e3e6eb; }
-.container { max-width: 720px; margin: 24px auto; padding: 0 16px; }
-.button, button { display: inline-block; padding: 6px 12px; border-radius: 6px; border: 1px solid #c9ced6; background: #fff; cursor: pointer; text-decoration: none; font: inherit; }
+h1 { font-size: 1.5rem; margin: 0 0 16px; }
+
+/* Header content lines up with the 720px column on wide screens. */
+.header { position: sticky; top: 0; z-index: 1; display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 8px max(16px, calc((100% - 720px) / 2 + 16px)); background: #fff; border-bottom: 1px solid #e3e6eb; }
+.header .brand { font-weight: 600; text-decoration: none; padding: 10px 0; }
+.container { max-width: 720px; margin: 16px auto; padding: 0 16px; }
+
+/* Buttons and button-like links: at least 44px tall so they are easy to tap. */
+.button, button { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 8px 14px; border-radius: 6px; border: 1px solid #c9ced6; background: #fff; cursor: pointer; text-decoration: none; font: inherit; }
 .button.primary, button.primary { background: #1d4ed8; border-color: #1d4ed8; color: #fff; }
 button:disabled { opacity: 0.6; cursor: not-allowed; }
 .danger { color: #b91c1c; }
+
+/* Task card: text and actions side by side; stacked on narrow screens (see below). */
 .card { background: #fff; border: 1px solid #e3e6eb; border-radius: 8px; padding: 12px 16px; margin-bottom: 8px; display: flex; justify-content: space-between; gap: 12px; }
-.card h3 { margin: 0 0 4px; font-size: 1rem; }
-.card p { margin: 0; color: #4b5563; }
+.card-body { min-width: 0; } /* lets long words wrap instead of widening the card */
+.card h3 { margin: 0 0 4px; font-size: 1rem; overflow-wrap: anywhere; }
+.card p { margin: 0 0 4px; color: #4b5563; overflow-wrap: anywhere; }
 .meta { font-size: 0.8rem; color: #6b7280; }
-.actions { display: flex; gap: 8px; align-items: flex-start; }
-.alert { padding: 8px 12px; border-radius: 6px; margin-bottom: 12px; }
+.actions { display: flex; gap: 8px; align-items: flex-start; flex-shrink: 0; }
+
+.alert { padding: 10px 12px; border-radius: 6px; margin-bottom: 12px; overflow-wrap: anywhere; }
+.alert p { margin: 0 0 8px; }
 .alert.success { background: #ecfdf5; color: #065f46; }
 .alert.error { background: #fef2f2; color: #991b1b; }
+
 form label { display: block; margin-bottom: 12px; }
-form input, form textarea { display: block; width: 100%; padding: 8px; margin-top: 4px; border: 1px solid #c9ced6; border-radius: 6px; font: inherit; }
+/* 16px text in inputs stops mobile browsers from zooming in on focus. */
+form input, form textarea { display: block; width: 100%; padding: 10px; margin-top: 4px; border: 1px solid #c9ced6; border-radius: 6px; font: inherit; font-size: 16px; }
 .field-error { color: #b91c1c; font-size: 0.85rem; }
+.form-actions, .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .muted { color: #6b7280; text-align: center; }
+
+@media (max-width: 480px) {
+  .card { flex-direction: column; }
+  .actions > * { flex: 1; } /* full-width Edit / Delete buttons */
+  .form-actions > * { flex: 1 1 100%; } /* stacked Save / Cancel */
+}

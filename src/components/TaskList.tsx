@@ -96,7 +96,7 @@ export function TaskList({
         const deleting = deleteTask.isPending && deleteTask.variables?.id === task.id;
         return (
           <article key={task.id} className="card">
-            <div>
+            <div className="card-body">
               <h3>{task.titulo}</h3>
               {task.descricao && <p>{task.descricao}</p>}
               <span className="meta">Created {dateFormat.format(task.dataCriacao)} UTC</span>
