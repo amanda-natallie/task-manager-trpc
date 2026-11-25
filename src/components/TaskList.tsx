@@ -39,6 +39,13 @@ export function TaskList({
     flash && FLASH[flash] ? { kind: "success", text: FLASH[flash] } : null,
   );
 
+  // The flash message came in the URL (?msg=created). Remove it once shown, so a
+  // reload or a shared link doesn't show "Task created." again. replaceState only
+  // changes the address bar: no navigation and no new server render.
+  useEffect(() => {
+    if (flash) window.history.replaceState(null, "", window.location.pathname);
+  }, [flash]);
+
   const listOptions = trpc.task.list.infiniteQueryOptions(
     { limit: pageSize },
     {
@@ -102,6 +109,7 @@ export function TaskList({
                 className="danger"
                 disabled={deleting}
                 onClick={() => {
+                  if (!window.confirm(`Delete "${task.titulo}"?`)) return;
                   setFeedback(null);
                   deleteTask.mutate({ id: task.id });
                 }}
