@@ -1,9 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
-import { TRPCError } from "@trpc/server";
 import { TaskForm } from "@/components/TaskForm";
-import { serverCaller } from "@/trpc/server";
+import { getServerTrpc, isNotFound } from "@/trpc/server";
 
 export const dynamic = "force-dynamic";
 
@@ -11,7 +10,8 @@ export default async function EditTaskPage({ params }: { params: Promise<{ id: s
   const { id } = await params;
   try {
     // Load the task on the server so the form opens already filled in.
-    const task = await serverCaller.task.byId({ id });
+    const trpc = await getServerTrpc();
+    const task = await trpc.task.byId.query({ id });
     return (
       <>
         <Link href="/" className="back-link">
@@ -28,7 +28,7 @@ export default async function EditTaskPage({ params }: { params: Promise<{ id: s
       </>
     );
   } catch (err) {
-    if (err instanceof TRPCError && err.code === "NOT_FOUND") notFound();
+    if (isNotFound(err)) notFound();
     throw err;
   }
 }

@@ -85,6 +85,13 @@ test("shows a validation error for an empty title and sends nothing", async ({ p
   expect(sent).toBe(false);
 });
 
+test("opens a seeded task by its fixed id", async ({ page }) => {
+  // Seed ids are deterministic, so every server instance knows this task.
+  const response = await page.goto("/tasks/00000000-0000-4000-8000-000000000001/edit");
+  expect(response?.status()).toBe(200);
+  await expect(page.getByLabel("Title")).toHaveValue("Example task 1");
+});
+
 test("answers 404 for a task that does not exist", async ({ page }) => {
   const response = await page.goto("/tasks/does-not-exist/edit");
   expect(response?.status()).toBe(404);

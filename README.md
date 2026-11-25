@@ -9,7 +9,7 @@ whose backend is a tRPC router that keeps tasks **in memory** (no database).
 
 The app is deployed at [https://task-manager-trpc-zeta.vercel.app](https://task-manager-trpc-zeta.vercel.app). Pushes to `main` deploy to production automatically on Vercel.
 
-The task list is stored in memory on the server. It is re-seeded with the example tasks whenever the serverless process restarts, so data created in the demo is not persisted.
+The task list is stored in memory on the server. It is re-seeded with the example tasks whenever the serverless function restarts, so data created in the demo is not persisted. Serverless instances don't share memory, so if Vercel runs more than one instance of the API at the same time, a task created on one may briefly be missing on another. A database or KV store would remove this limit (see [Main decisions](#main-decisions)).
 
 ## Run it
 
@@ -34,8 +34,8 @@ No environment variables or secrets are needed.
 - **CRUD over tRPC**: `task.list`, `task.byId`, `task.create`, `task.update`, `task.delete`.
 - **Validation**: Zod schemas on every procedure. Empty or whitespace-only titles are rejected
   (`BAD_REQUEST`); updating or deleting a missing task returns `NOT_FOUND` with a clear message.
-- **List page (`/`)** is server-side rendered: the Server Component calls the router directly and
-  passes the first page to the client as initial data, so tasks are in the first HTML response.
+- **List page (`/`)** is server-side rendered: the Server Component loads the first page through
+  the tRPC API and passes it to the client as initial data, so tasks are in the first HTML response.
 - **Delete** from the list (after a confirmation dialog), applied optimistically: the task disappears at once
   and comes back with an error message if the server call fails.
 - **Create/edit form** (`/tasks/new`, `/tasks/[id]/edit`): functional components + hooks,
@@ -64,22 +64,22 @@ flowchart LR
   end
   subgraph Server["Next.js server"]
     rsc["Server Component: list / edit page"]
-    caller["Server-side tRPC caller"]
+    sclient["Server-side tRPC client"]
     api["Route Handler /api/trpc"]
     router["tRPC appRouter: Zod validation"]
     store[("In-memory store (Map)")]
   end
   page -- "GET /" --> rsc
-  rsc --> caller --> router
+  rsc --> sclient -- "HTTP, superjson" --> api
   cc --> rq -- "HTTP batch, superjson" --> api --> router
   router --> store
   rsc -. "first page as initialData" .-> cc
 ```
 
-- **First load (SSR)**: the Server Component calls the router through a server-side caller (no
-  HTTP hop) and passes the first page to `TaskList` as React Query's initial data.
+- **First load (SSR)**: the Server Component loads the first page through a server-side tRPC client
+  that calls `/api/trpc`, and passes it to `TaskList` as React Query's initial data.
 - **After that (client)**: queries and mutations go through React Query and the tRPC client to
-  `/api/trpc`, which runs the same router. Both paths share one set of procedures and validation.
+  `/api/trpc` too. Both paths share one endpoint, one set of procedures and one store.
 
 **Trade-offs**
 
@@ -100,9 +100,9 @@ flowchart LR
 - **CI** ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs on every push and pull request to
   `main`: type check, ESLint, unit tests, production build, then the Playwright E2E tests against that
   build.
-- **Tests**: 13 unit tests (Vitest) and 5 E2E tests (Playwright: create, edit, delete with the confirm
-  dialog, empty-title validation, 404 for a missing task).
-- **Lighthouse** (local production build, Lighthouse 13): Performance 100 on desktop and 99–100 on
+- **Tests**: 14 unit tests (Vitest) and 6 E2E tests (Playwright: create, edit, delete with the confirm
+  dialog, empty-title validation, a seeded task by its fixed id, 404 for a missing task).
+- **Lighthouse** (local production build, Lighthouse 13): Performance 100 on desktop and 95–100 on
   mobile for `/` and `/tasks/new`, and 100 in Accessibility, Best Practices and SEO on both.
 
 ## Structure
@@ -117,7 +117,7 @@ src/
     routers/task.test.ts  router tests (CRUD, validation, errors, pagination)
   trpc/
     client.tsx          React Query + tRPC provider for Client Components
-    server.ts           server-side caller used for SSR
+    server.ts           server-side tRPC client used for SSR (calls /api/trpc)
   app/
     api/trpc/[trpc]/route.ts   tRPC HTTP endpoint (Route Handler)
     (list)/page.tsx            SSR task list
@@ -145,8 +145,16 @@ e2e/tasks.spec.ts            Playwright end-to-end tests
   deleted between page loads. No skipped or repeated items while scrolling.
 - **Validation on both sides**: the form validates for fast feedback; the server validates because
   the client can't be trusted.
-- **SSR via a direct server caller** (no HTTP hop on the server) and `dynamic = "force-dynamic"`,
-  because the list changes at runtime and must never be prerendered at build time.
+- **SSR reads through `/api/trpc`**, not by calling the router in-process. On Vercel the pages and
+  the `/api/trpc` Route Handler run as separate serverless functions, each with its own memory, so a
+  direct call from a page read a different copy of the list than the browser wrote to (a task
+  created in the browser didn't show up after the redirect, and Edit links led to "Not found").
+  Routing every read and write through one endpoint keeps them on the same store, at the cost of one
+  HTTP hop on the server. With a database, the direct server caller would be the better choice.
+- **Deterministic seed** (fixed ids and dates): every cold-started instance starts with the same
+  example tasks, so their ids are valid everywhere.
+- **`dynamic = "force-dynamic"`** on the list and edit pages, because the list changes at runtime
+  and must never be prerendered at build time.
 - **Loading state only on the list** (route group `(list)`): a loading boundary makes Next.js start
   streaming the page with HTTP 200 before it knows the result, so with one on the edit page a
   missing task could no longer answer with a real 404.
@@ -155,8 +163,9 @@ e2e/tasks.spec.ts            Playwright end-to-end tests
 - **Next.js 15, not 16**: the challenge asks for Next.js v15, so the app uses the latest 15.x release.
 - **Portuguese field names** (`titulo`, `descricao`, `dataCriacao`): they match the challenge
   statement exactly, so the model can be checked against it. Everything else is in English.
-- **In-memory store limits**: data resets on restart and isn't shared across multiple server
-  instances. A real deployment would swap `store.ts` for a database behind the same router.
+- **In-memory store limits**: data resets on restart and isn't shared across server instances
+  (on serverless hosting, across concurrent instances of the API function). A real deployment would
+  swap `store.ts` for a database or KV store behind the same router.
 
 ## Manual test checklist
 

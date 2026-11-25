@@ -6,6 +6,10 @@
  * load this module in more than one bundle (Route Handler vs. Server Components)
  * and re-evaluates it on hot reload in development. Data is lost when the
  * server restarts, which is expected for this exercise.
+ *
+ * Serverless caveat: memory is per server instance, and instances don't share
+ * it. That is why SSR reads through `/api/trpc` (see `src/trpc/server.ts`) and
+ * the seed is deterministic. A real deployment would use a database or a KV store.
  */
 export type Task = {
   id: string;
@@ -18,21 +22,29 @@ type Store = { tasks: Map<string, Task> };
 
 const globalForStore = globalThis as unknown as { __taskStore?: Store };
 
-function seed(): Map<string, Task> {
-  // A few fictional tasks so the list and the infinite scroll have something to show.
-  const map = new Map<string, Task>();
-  const now = Date.now();
-  for (let i = 1; i <= 25; i++) {
-    const task: Task = {
-      id: crypto.randomUUID(),
+/**
+ * A few fictional tasks so the list and the infinite scroll have something to show.
+ * Ids and dates are fixed (not random or "now") so every server instance starts
+ * from the same list: on serverless hosting each cold start seeds its own copy,
+ * and with random ids a task id seen in one instance would not exist in another.
+ */
+export const SEED_BASE_TIME = Date.UTC(2026, 0, 1, 12, 0, 0);
+
+export function seedTasks(): Task[] {
+  return Array.from({ length: 25 }, (_, index) => {
+    const i = index + 1;
+    return {
+      id: `00000000-0000-4000-8000-${String(i).padStart(12, "0")}`,
       titulo: `Example task ${i}`,
       descricao: i % 3 === 0 ? undefined : `Fictional description for task ${i}`,
-      // Older tasks get older timestamps so the newest-first order is stable.
-      dataCriacao: new Date(now - (25 - i) * 60_000),
+      // One minute apart, so the newest-first order is stable.
+      dataCriacao: new Date(SEED_BASE_TIME + i * 60_000),
     };
-    map.set(task.id, task);
-  }
-  return map;
+  });
+}
+
+function seed(): Map<string, Task> {
+  return new Map(seedTasks().map((t) => [t.id, t]));
 }
 
 export const store: Store = (globalForStore.__taskStore ??= { tasks: seed() });

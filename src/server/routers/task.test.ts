@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { appRouter } from "./_app";
 import { createCallerFactory } from "../trpc";
-import { resetStore } from "../store";
+import { resetStore, seedTasks } from "../store";
 import { POST } from "@/app/api/trpc/[trpc]/route";
 
 const caller = createCallerFactory(appRouter)({});
@@ -89,5 +89,15 @@ describe("task router", () => {
     const { status, body } = await post("task.update", { id: t.id, titulo: "x".repeat(121) });
     expect(status).toBe(400);
     expect(body.error.json.data.zodError.fieldErrors.titulo).toEqual(["Title is too long"]);
+  });
+
+  it("seeds the same tasks (ids and dates) in every server instance", async () => {
+    // Two calls stand in for two cold-started serverless instances.
+    expect(seedTasks()).toEqual(seedTasks());
+    resetStore(seedTasks());
+    const first = await caller.task.byId({ id: "00000000-0000-4000-8000-000000000025" });
+    expect(first.titulo).toBe("Example task 25");
+    const page = await caller.task.list({ limit: 1 });
+    expect(page.items[0]?.id).toBe(first.id); // newest seed task comes first
   });
 });
