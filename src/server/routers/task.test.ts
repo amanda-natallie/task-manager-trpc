@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { appRouter } from "./_app";
 import { createCallerFactory } from "../trpc";
 import { resetStore } from "../store";
+import { POST } from "@/app/api/trpc/[trpc]/route";
 
 const caller = createCallerFactory(appRouter)({});
 
@@ -54,5 +55,39 @@ describe("task router", () => {
     expect(new Set(seen).size).toBe(seen.length); // no repeated tasks
     expect(seen).toHaveLength(4); // and none skipped
     expect(p3.nextCursor).toBeNull();
+  });
+
+  it("returns NOT_FOUND for byId with an unknown id", async () => {
+    await expect(caller.task.byId({ id: "missing" })).rejects.toMatchObject({
+      code: "NOT_FOUND",
+      message: "Task missing not found",
+    });
+  });
+
+  // These go through the real HTTP handler so they also cover the error formatter
+  // (readable message + Zod field errors) that the form relies on.
+  async function post(path: string, input: unknown) {
+    const res = await POST(
+      new Request(`http://localhost/api/trpc/${path}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ json: input }),
+      }),
+    );
+    return { status: res.status, body: await res.json() };
+  }
+
+  it("create: returns a 400 with a field error for an empty title", async () => {
+    const { status, body } = await post("task.create", { titulo: "" });
+    expect(status).toBe(400);
+    expect(body.error.json.message).toBe("Title is required");
+    expect(body.error.json.data.zodError.fieldErrors.titulo).toEqual(["Title is required"]);
+  });
+
+  it("update: returns a 400 with a field error for a too long title", async () => {
+    const t = await caller.task.create({ titulo: "Valid" });
+    const { status, body } = await post("task.update", { id: t.id, titulo: "x".repeat(121) });
+    expect(status).toBe(400);
+    expect(body.error.json.data.zodError.fieldErrors.titulo).toEqual(["Title is too long"]);
   });
 });
