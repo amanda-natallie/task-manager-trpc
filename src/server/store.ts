@@ -37,11 +37,20 @@ function seed(): Map<string, Task> {
 
 export const store: Store = (globalForStore.__taskStore ??= { tasks: seed() });
 
+/**
+ * List order: newest first, ties broken by id so the order is total and stable.
+ * Pagination uses the same comparison, so cursors always agree with the list.
+ */
+export function compareTasks(
+  a: Pick<Task, "dataCriacao" | "id">,
+  b: Pick<Task, "dataCriacao" | "id">,
+): number {
+  return b.dataCriacao.getTime() - a.dataCriacao.getTime() || a.id.localeCompare(b.id);
+}
+
 /** Tasks sorted newest first. Sorting on read keeps writes O(1) and is fine for an in-memory demo. */
 export function sortedTasks(): Task[] {
-  return [...store.tasks.values()].sort(
-    (a, b) => b.dataCriacao.getTime() - a.dataCriacao.getTime() || a.id.localeCompare(b.id),
-  );
+  return [...store.tasks.values()].sort(compareTasks);
 }
 
 /** Test helper: start from a known state. */

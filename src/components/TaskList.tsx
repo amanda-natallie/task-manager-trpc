@@ -15,6 +15,15 @@ const FLASH: Record<string, string> = {
   updated: "Task updated.",
 };
 
+// A fixed time zone makes the server HTML and the client render produce the same
+// text. With the default (each machine's own zone) a visitor in another zone would
+// get a hydration mismatch.
+const dateFormat = new Intl.DateTimeFormat("en-US", {
+  dateStyle: "medium",
+  timeStyle: "short",
+  timeZone: "UTC",
+});
+
 export function TaskList({
   initialPage,
   pageSize,
@@ -83,7 +92,7 @@ export function TaskList({
             <div>
               <h3>{task.titulo}</h3>
               {task.descricao && <p>{task.descricao}</p>}
-              <span className="meta">Created {task.dataCriacao.toLocaleString("en-US")}</span>
+              <span className="meta">Created {dateFormat.format(task.dataCriacao)} UTC</span>
             </div>
             <div className="actions">
               <Link className="button" href={`/tasks/${task.id}/edit`}>

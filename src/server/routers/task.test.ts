@@ -42,4 +42,17 @@ describe("task router", () => {
     expect([...p1.items, ...p2.items, ...p3.items]).toHaveLength(5);
     expect(p3.nextCursor).toBeNull();
   });
+
+  it("keeps paginating correctly when the cursor task is deleted", async () => {
+    for (let i = 0; i < 5; i++) await caller.task.create({ titulo: `T${i}` });
+    const p1 = await caller.task.list({ limit: 2 });
+    // Delete the very task the cursor points to before asking for the next page.
+    await caller.task.delete({ id: p1.items[1]!.id });
+    const p2 = await caller.task.list({ limit: 2, cursor: p1.nextCursor });
+    const p3 = await caller.task.list({ limit: 2, cursor: p2.nextCursor });
+    const seen = [p1.items[0]!, ...p2.items, ...p3.items].map((t) => t.id);
+    expect(new Set(seen).size).toBe(seen.length); // no repeated tasks
+    expect(seen).toHaveLength(4); // and none skipped
+    expect(p3.nextCursor).toBeNull();
+  });
 });
