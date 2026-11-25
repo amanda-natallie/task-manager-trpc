@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createTRPCClient, TRPCClientError, type TRPCLink } from "@trpc/client";
 import { observable } from "@trpc/server/observable";
@@ -47,6 +47,13 @@ function renderList({ deleteFails }: { deleteFails: boolean }) {
   );
 }
 
+/** Clicks the task's delete button, then "Delete" in the confirmation dialog. */
+function confirmDelete(titulo: string) {
+  fireEvent.click(screen.getByRole("button", { name: `Delete ${titulo}` }));
+  const dialog = screen.getByRole("dialog", { name: "Delete task?" });
+  fireEvent.click(within(dialog).getByRole("button", { name: "Delete" }));
+}
+
 describe("TaskList optimistic delete", () => {
   beforeEach(() => {
     // jsdom has no IntersectionObserver (used by the infinite scroll).
@@ -57,7 +64,14 @@ describe("TaskList optimistic delete", () => {
         disconnect() {}
       },
     );
-    vi.spyOn(window, "confirm").mockReturnValue(true);
+    // jsdom has no showModal()/close() on <dialog> (used by the delete confirmation).
+    HTMLDialogElement.prototype.showModal = function (this: HTMLDialogElement) {
+      this.open = true;
+    };
+    HTMLDialogElement.prototype.close = function (this: HTMLDialogElement) {
+      this.open = false;
+      this.dispatchEvent(new Event("close"));
+    };
   });
   afterEach(() => {
     cleanup();
@@ -67,7 +81,7 @@ describe("TaskList optimistic delete", () => {
 
   it("removes the task right away and confirms when the server succeeds", async () => {
     renderList({ deleteFails: false });
-    fireEvent.click(screen.getByRole("button", { name: "Delete Task A" }));
+    confirmDelete("Task A");
     await waitFor(() => expect(screen.queryByText("Task A")).toBeNull()); // before the server answers
     expect(await screen.findByText("Task deleted.")).toBeTruthy();
     expect(screen.queryByText("Task A")).toBeNull();
@@ -76,7 +90,7 @@ describe("TaskList optimistic delete", () => {
 
   it("puts the task back and shows an error when the server fails", async () => {
     renderList({ deleteFails: true });
-    fireEvent.click(screen.getByRole("button", { name: "Delete Task A" }));
+    confirmDelete("Task A");
     await waitFor(() => expect(screen.queryByText("Task A")).toBeNull());
     expect(await screen.findByText("Could not delete: Server unavailable")).toBeTruthy();
     expect(screen.getByText("Task A")).toBeTruthy(); // rolled back

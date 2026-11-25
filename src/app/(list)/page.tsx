@@ -20,7 +20,10 @@ export default async function TasksPage({
   ]);
   return (
     <>
-      <h1>Tasks</h1>
+      <div className="page-header">
+        <h1>Tasks</h1>
+        <p className="subtitle">Everything on your list, kept in server memory.</p>
+      </div>
       <TaskList initialPage={firstPage} pageSize={PAGE_SIZE} flash={msg} />
     </>
   );

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect } from "react";
+import { CircleAlert, RotateCw } from "lucide-react";
 
 /**
  * Error boundary for every page. It catches unexpected errors thrown while
@@ -15,11 +16,16 @@ import { useEffect } from "react";
 export default function ErrorPage({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
   useEffect(() => console.error(error), [error]);
   return (
-    <div className="alert error" role="alert">
-      <p>Something went wrong while loading this page.</p>
+    <div className="panel state error" role="alert">
+      <CircleAlert aria-hidden="true" size={32} />
+      <h1>Something went wrong</h1>
+      <p>We couldn&apos;t load this page. Please try again.</p>
       <div className="row">
-        <button onClick={reset}>Try again</button>
-        <Link href="/" className="button">
+        <button type="button" onClick={reset}>
+          <RotateCw aria-hidden="true" size={16} />
+          Try again
+        </button>
+        <Link href="/" className="button primary">
           Back to tasks
         </Link>
       </div>

@@ -42,17 +42,25 @@ test("deletes a task after confirming", async ({ page }) => {
   const titulo = uniqueTitle("Old task");
   await createTask(page, titulo);
 
-  // Dismissing the confirm dialog keeps the task.
-  page.once("dialog", (dialog) => dialog.dismiss());
+  // Cancelling the confirmation keeps the task.
+  const dialog = page.getByRole("dialog", { name: "Delete task?" });
   await page.getByRole("button", { name: `Delete ${titulo}` }).click();
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toContainText(titulo);
+  await dialog.getByRole("button", { name: "Cancel" }).click();
+  await expect(dialog).toBeHidden();
   await expect(page.getByRole("heading", { name: titulo })).toBeVisible();
 
-  // Accepting it deletes the task.
-  page.once("dialog", (dialog) => {
-    expect(dialog.message()).toBe(`Delete "${titulo}"?`);
-    return dialog.accept();
-  });
+  // Esc also closes it without deleting.
   await page.getByRole("button", { name: `Delete ${titulo}` }).click();
+  await expect(dialog).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+  await expect(page.getByRole("heading", { name: titulo })).toBeVisible();
+
+  // Confirming deletes the task.
+  await page.getByRole("button", { name: `Delete ${titulo}` }).click();
+  await dialog.getByRole("button", { name: "Delete", exact: true }).click();
   await expect(page.getByRole("status")).toContainText("Task deleted.");
   await expect(page.getByRole("heading", { name: titulo })).toHaveCount(0);
 

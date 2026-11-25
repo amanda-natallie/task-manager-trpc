@@ -1,4 +1,6 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
+import { ArrowLeft } from "lucide-react";
 import { TRPCError } from "@trpc/server";
 import { TaskForm } from "@/components/TaskForm";
 import { serverCaller } from "@/trpc/server";
@@ -12,8 +14,17 @@ export default async function EditTaskPage({ params }: { params: Promise<{ id: s
     const task = await serverCaller.task.byId({ id });
     return (
       <>
-        <h1>Edit task</h1>
-        <TaskForm initial={{ id: task.id, titulo: task.titulo, descricao: task.descricao }} />
+        <Link href="/" className="back-link">
+          <ArrowLeft aria-hidden="true" size={16} />
+          Back to tasks
+        </Link>
+        <div className="page-header">
+          <h1>Edit task</h1>
+          <p className="subtitle">Change the title or the description.</p>
+        </div>
+        <div className="panel">
+          <TaskForm initial={{ id: task.id, titulo: task.titulo, descricao: task.descricao }} />
+        </div>
       </>
     );
   } catch (err) {

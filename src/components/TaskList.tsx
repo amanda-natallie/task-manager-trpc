@@ -4,10 +4,13 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { inferRouterOutputs } from "@trpc/server";
+import { CircleAlert, CircleCheck, Clock, Inbox, LoaderCircle, Pencil, Plus, Trash2, X } from "lucide-react";
 import type { AppRouter } from "@/server/routers/_app";
 import { useTRPC } from "@/trpc/client";
+import { ConfirmDialog } from "./ConfirmDialog";
 
 type ListPage = inferRouterOutputs<AppRouter>["task"]["list"];
+type ListTask = ListPage["items"][number];
 type Feedback = { kind: "success" | "error"; text: string } | null;
 
 const FLASH: Record<string, string> = {
@@ -38,6 +41,7 @@ export function TaskList({
   const [feedback, setFeedback] = useState<Feedback>(
     flash && FLASH[flash] ? { kind: "success", text: FLASH[flash] } : null,
   );
+  const [toDelete, setToDelete] = useState<ListTask | null>(null);
 
   // The flash message came in the URL (?msg=created). Remove it once shown, so a
   // reload or a shared link doesn't show "Task created." again. replaceState only
@@ -45,6 +49,13 @@ export function TaskList({
   useEffect(() => {
     if (flash) window.history.replaceState(null, "", window.location.pathname);
   }, [flash]);
+
+  // Success toasts hide themselves after a few seconds; errors stay until dismissed.
+  useEffect(() => {
+    if (feedback?.kind !== "success") return;
+    const timer = setTimeout(() => setFeedback(null), 4000);
+    return () => clearTimeout(timer);
+  }, [feedback]);
 
   const listOptions = trpc.task.list.infiniteQueryOptions(
     { limit: pageSize },
@@ -67,7 +78,14 @@ export function TaskList({
         const previous = queryClient.getQueryData(listOptions.queryKey);
         queryClient.setQueryData(listOptions.queryKey, (old) =>
           old
-            ? { ...old, pages: old.pages.map((p) => ({ ...p, items: p.items.filter((t) => t.id !== id) })) }
+            ? {
+                ...old,
+                pages: old.pages.map((p) => ({
+                  ...p,
+                  items: p.items.filter((t) => t.id !== id),
+                  total: p.total - 1,
+                })),
+              }
             : old,
         );
         return { previous };
@@ -94,57 +112,121 @@ export function TaskList({
     return () => observer.disconnect();
   }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
-  const tasks = query.data?.pages.flatMap((p) => p.items) ?? [];
+  const pages = query.data?.pages ?? [];
+  const tasks = pages.flatMap((p) => p.items);
+  const total = pages.at(-1)?.total ?? tasks.length;
 
   return (
     <section aria-label="Task list">
-      {/* Live regions stay in the DOM so screen readers announce new messages. */}
-      <div role="status">
-        {feedback?.kind === "success" && <div className="alert success">{feedback.text}</div>}
-      </div>
-      <div role="alert">
-        {feedback?.kind === "error" && <div className="alert error">{feedback.text}</div>}
-        {query.isError && <div className="alert error">Could not load tasks: {query.error.message}</div>}
+      {/* Toasts. The live regions stay in the DOM so screen readers announce new messages. */}
+      <div className="toasts">
+        <div role="status">
+          {feedback?.kind === "success" && (
+            <div className="toast success">
+              <CircleCheck aria-hidden="true" size={18} />
+              <span className="toast-text">{feedback.text}</span>
+              <button type="button" className="icon-button" aria-label="Dismiss" onClick={() => setFeedback(null)}>
+                <X aria-hidden="true" size={16} />
+              </button>
+            </div>
+          )}
+        </div>
+        <div role="alert">
+          {feedback?.kind === "error" && (
+            <div className="toast error">
+              <CircleAlert aria-hidden="true" size={18} />
+              <span className="toast-text">{feedback.text}</span>
+              <button type="button" className="icon-button" aria-label="Dismiss" onClick={() => setFeedback(null)}>
+                <X aria-hidden="true" size={16} />
+              </button>
+            </div>
+          )}
+          {query.isError && (
+            <div className="toast error">
+              <CircleAlert aria-hidden="true" size={18} />
+              <span className="toast-text">Could not load tasks: {query.error.message}</span>
+            </div>
+          )}
+        </div>
       </div>
 
-      {tasks.length === 0 && <p className="muted">No tasks yet. Create the first one.</p>}
-
-      {tasks.map((task) => (
-        <article key={task.id} className="card">
-          <div className="card-body">
-            <h2>{task.titulo}</h2>
-            {task.descricao && <p>{task.descricao}</p>}
-            <span className="meta">
-              Created <time dateTime={task.dataCriacao.toISOString()}>{dateFormat.format(task.dataCriacao)} UTC</time>
-            </span>
-          </div>
-          <div className="actions">
-            {/* aria-label adds the task title, so each button has a unique name for screen readers. */}
-            <Link className="button" href={`/tasks/${task.id}/edit`} aria-label={`Edit ${task.titulo}`}>
-              Edit
-            </Link>
-            <button
-              type="button"
-              className="danger"
-              aria-label={`Delete ${task.titulo}`}
-              onClick={() => {
-                if (!window.confirm(`Delete "${task.titulo}"?`)) return;
-                deleteTask.mutate({ id: task.id });
-              }}
-            >
-              Delete
-            </button>
-          </div>
-        </article>
-      ))}
+      {tasks.length === 0 ? (
+        <div className="empty">
+          <Inbox aria-hidden="true" size={32} />
+          <h2>No tasks yet</h2>
+          <p>Create your first task to get started.</p>
+          <Link href="/tasks/new" className="button primary">
+            <Plus aria-hidden="true" size={16} />
+            New task
+          </Link>
+        </div>
+      ) : (
+        <>
+          <p className="list-meta">
+            {total} {total === 1 ? "task" : "tasks"} · newest first
+          </p>
+          <ul className="tasks">
+            {tasks.map((task) => (
+              <li key={task.id}>
+                <article className="card">
+                  <div className="card-body">
+                    <h2>{task.titulo}</h2>
+                    {task.descricao && <p>{task.descricao}</p>}
+                    <span className="meta">
+                      <Clock aria-hidden="true" size={13} />
+                      <time dateTime={task.dataCriacao.toISOString()}>
+                        {dateFormat.format(task.dataCriacao)} UTC
+                      </time>
+                    </span>
+                  </div>
+                  <div className="actions">
+                    {/* Icon-only buttons: aria-label names them (with the task title, so each is unique). */}
+                    <Link
+                      className="button icon-button"
+                      href={`/tasks/${task.id}/edit`}
+                      aria-label={`Edit ${task.titulo}`}
+                      title="Edit"
+                    >
+                      <Pencil aria-hidden="true" size={16} />
+                    </Link>
+                    <button
+                      type="button"
+                      className="icon-button danger"
+                      aria-label={`Delete ${task.titulo}`}
+                      title="Delete"
+                      onClick={() => setToDelete(task)}
+                    >
+                      <Trash2 aria-hidden="true" size={16} />
+                    </button>
+                  </div>
+                </article>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
 
       <div ref={sentinel} aria-hidden="true" />
       {isFetchingNextPage && (
-        <p className="muted" role="status">
+        <p className="list-footer" role="status">
+          <LoaderCircle aria-hidden="true" size={16} className="spin" />
           Loading more…
         </p>
       )}
-      {!hasNextPage && tasks.length > 0 && <p className="muted">All {tasks.length} tasks loaded.</p>}
+      {!hasNextPage && tasks.length > 0 && <p className="list-footer">All {tasks.length} tasks loaded.</p>}
+
+      <ConfirmDialog
+        open={toDelete !== null}
+        title="Delete task?"
+        confirmLabel="Delete"
+        onCancel={() => setToDelete(null)}
+        onConfirm={() => {
+          if (toDelete) deleteTask.mutate({ id: toDelete.id });
+          setToDelete(null);
+        }}
+      >
+        <strong>{toDelete?.titulo}</strong> will be permanently deleted.
+      </ConfirmDialog>
     </section>
   );
 }

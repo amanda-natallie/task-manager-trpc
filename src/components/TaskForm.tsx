@@ -3,7 +3,10 @@
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { CircleAlert, LoaderCircle } from "lucide-react";
 import { useTRPC } from "@/trpc/client";
+
+const TITLE_MAX = 120;
 
 type Initial = { id: string; titulo: string; descricao?: string };
 
@@ -51,11 +54,23 @@ export function TaskForm({ initial }: { initial?: Initial }) {
   return (
     <form onSubmit={handleSubmit} noValidate aria-busy={pending}>
       {/* Always in the DOM so screen readers announce the message when it appears. */}
-      <div role="alert">{serverError && <div className="alert error">{serverError}</div>}</div>
+      <div role="alert">
+        {serverError && (
+          <div className="alert error">
+            <CircleAlert aria-hidden="true" size={18} />
+            <span>{serverError}</span>
+          </div>
+        )}
+      </div>
       <div className="field">
-        <label htmlFor="titulo">
-          Title <span aria-hidden="true">*</span>
-        </label>
+        <div className="field-head">
+          <label htmlFor="titulo">
+            Title <span className="required" aria-hidden="true">*</span>
+          </label>
+          <span className="counter" aria-hidden="true">
+            {titulo.length}/{TITLE_MAX}
+          </span>
+        </div>
         <input
           id="titulo"
           name="titulo"
@@ -64,16 +79,21 @@ export function TaskForm({ initial }: { initial?: Initial }) {
           required
           aria-invalid={!!titleError}
           aria-describedby={titleError ? "titulo-error" : undefined}
-          maxLength={120}
+          maxLength={TITLE_MAX}
+          placeholder="What needs to be done?"
         />
         {titleError && (
           <span id="titulo-error" className="field-error" role="alert">
+            <CircleAlert aria-hidden="true" size={14} />
             {titleError}
           </span>
         )}
       </div>
       <div className="field">
-        <label htmlFor="descricao">Description</label>
+        <div className="field-head">
+          <label htmlFor="descricao">Description</label>
+          <span className="counter">Optional</span>
+        </div>
         <textarea
           id="descricao"
           name="descricao"
@@ -81,14 +101,16 @@ export function TaskForm({ initial }: { initial?: Initial }) {
           onChange={(e) => setDescricao(e.target.value)}
           rows={4}
           maxLength={1000}
+          placeholder="Add more details…"
         />
       </div>
       <div className="form-actions">
-        <button type="submit" className="primary" disabled={pending}>
-          {pending ? "Saving…" : initial ? "Save changes" : "Create task"}
-        </button>
-        <button type="button" onClick={() => router.push("/")} disabled={pending}>
+        <button type="button" className="ghost" onClick={() => router.push("/")} disabled={pending}>
           Cancel
+        </button>
+        <button type="submit" className="primary" disabled={pending}>
+          {pending && <LoaderCircle aria-hidden="true" size={16} className="spin" />}
+          {pending ? "Saving…" : initial ? "Save changes" : "Create task"}
         </button>
       </div>
     </form>

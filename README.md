@@ -36,18 +36,22 @@ No environment variables or secrets are needed.
   (`BAD_REQUEST`); updating or deleting a missing task returns `NOT_FOUND` with a clear message.
 - **List page (`/`)** is server-side rendered: the Server Component calls the router directly and
   passes the first page to the client as initial data, so tasks are in the first HTML response.
-- **Delete** from the list (after a confirmation), applied optimistically: the task disappears at once
+- **Delete** from the list (after a confirmation dialog), applied optimistically: the task disappears at once
   and comes back with an error message if the server call fails.
 - **Create/edit form** (`/tasks/new`, `/tasks/[id]/edit`): functional components + hooks,
   client-side validation (title required) mirrored by the backend, server errors shown in the form.
 - **Bonus: infinite scroll** with cursor-based pagination and an `IntersectionObserver` sentinel.
   25 fictional seed tasks are loaded at startup so the scroll can be seen.
 - **Loading and error pages**: a loading state for the list and an error boundary for every page.
-- **Responsive** from small phones (~360px) to desktop: one column, cards and form buttons stack on
-  narrow screens, 44px tap targets, no horizontal scrolling. Plain CSS, no UI framework.
+- **Dark UI**: plain CSS with a few design tokens (no UI framework), the Geist font through
+  `next/font`, [Lucide](https://lucide.dev) icons, toasts for feedback, a native `<dialog>` for the
+  delete confirmation, skeleton loading and custom error and 404 pages. Animations are turned off
+  for users who prefer reduced motion.
+- **Responsive** from small phones (~360px) to desktop: one column, form buttons stack on narrow
+  screens, 44px tap targets on phones, no horizontal scrolling.
 - **Accessible**: landmarks (`header`/`nav`/`main`), a skip link, visible keyboard focus, labelled
-  inputs with errors linked through `aria-describedby`, and live regions so success and error
-  messages are announced by screen readers.
+  inputs with errors linked through `aria-describedby`, icon buttons named with `aria-label`, live
+  regions so success and error messages are announced by screen readers, and WCAG AA contrast.
 
 ## Architecture
 
@@ -98,8 +102,8 @@ flowchart LR
   build.
 - **Tests**: 13 unit tests (Vitest) and 5 E2E tests (Playwright: create, edit, delete with the confirm
   dialog, empty-title validation, 404 for a missing task).
-- **Lighthouse** (local production build, Lighthouse 13): `/` and `/tasks/new` score 99 Performance on
-  mobile and 100 on desktop, and 100 in Accessibility, Best Practices and SEO on both.
+- **Lighthouse** (local production build, Lighthouse 13): Performance 100 on desktop and 99–100 on
+  mobile for `/` and `/tasks/new`, and 100 in Accessibility, Best Practices and SEO on both.
 
 ## Structure
 
@@ -119,10 +123,12 @@ src/
     (list)/page.tsx            SSR task list
     (list)/loading.tsx         loading state for the list only
     error.tsx                  error boundary for every page
+    not-found.tsx              404 page (unknown URLs and missing tasks)
     tasks/new, tasks/[id]/edit form pages
     robots.ts, icon.svg        robots.txt and favicon
   components/
     TaskList.tsx, TaskForm.tsx
+    ConfirmDialog.tsx          delete confirmation on the native <dialog>
     TaskForm.test.tsx          form test (React Testing Library + jsdom)
     TaskList.test.tsx          optimistic delete and rollback test
 e2e/tasks.spec.ts            Playwright end-to-end tests
@@ -155,11 +161,11 @@ e2e/tasks.spec.ts            Playwright end-to-end tests
 ## Manual test checklist
 
 1. Open `/`: the first 10 tasks are already in the page source (SSR). Scroll down to load the rest.
-2. Click **Delete** on a task, confirm: it disappears and "Task deleted." is shown.
-3. Click **+ New task**, submit with an empty title: "Title is required" appears and nothing is sent.
+2. Click the trash icon on a task, confirm in the dialog: it disappears and "Task deleted." is shown.
+3. Click **New task**, submit with an empty title: "Title is required" appears and nothing is sent.
 4. Create a task with a title: you are back on the list, it is at the top, "Task created." is shown,
    and `?msg=created` is removed from the address bar.
-5. Click **Edit**, change the title, save: "Task updated." is shown.
+5. Click the pencil icon, change the title, save: "Task updated." is shown.
 6. Open `/tasks/does-not-exist/edit`: a 404 page is shown (HTTP status 404).
 7. Resize the window down to phone width (or use the browser's device mode): everything stays
    readable and tappable, with no horizontal scrolling.
